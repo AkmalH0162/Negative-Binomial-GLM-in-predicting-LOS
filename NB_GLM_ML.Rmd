@@ -13,9 +13,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
 ```{r}
 ##install.packages("tidyverse")
@@ -49,7 +46,7 @@ library(rms)
 ```
 
 ```{r}
-fyp <- read_excel("C:\\Users\\Akmaluddin\\OneDrive\\Desktop\\UKM HTM.39-208-1-118.xlsx", sheet = "J18.9",guess_max=Inf)
+fyp <- read_excel("C:data.xlsx",guess_max=Inf)
 
 fyp <- fyp[1:3209,]
 #1:1243 kalau nak ambil yang main diagnose sahaja
