@@ -1,0 +1,502 @@
+---
+title: "FYP Pneumonia"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+date: "2023-10-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+##install.packages("tidyverse")
+#install.packages("caTools")    # For Linear regression 
+#install.packages('car')        # To check multicollinearity 
+#install.packages("quantmod")
+#install.packages("MASS")
+#install.packages("corrplot")   # plot correlation plot
+
+library(caTools)
+library(car)
+library(quantmod)
+library(MASS)
+library(corrplot)
+library(tidyverse)
+library("readxl")
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(performance)
+library(pscl)
+library(AER)
+library(caret)
+library(usefr)
+library(rpart)
+library(rpart.plot)
+library(broom)
+library(moments)
+library(statmod)
+library(rms)
+```
+
+```{r}
+fyp <- read_excel("C:\\Users\\Akmaluddin\\OneDrive\\Desktop\\UKM HTM.39-208-1-118.xlsx", sheet = "J18.9",guess_max=Inf)
+
+fyp <- fyp[1:3209,]
+#1:1243 kalau nak ambil yang main diagnose sahaja
+
+fyp <- fyp %>%
+  filter(fyp$LOS <= 140)
+
+y <- fyp %>%
+  select(PD1:DX29) %>%
+  mutate(n_Diagnose = rowSums(!is.na(.))) %>%
+  as.data.frame()
+
+z <- fyp %>%
+  select(PDX1:PDX30) %>%
+  mutate(n_Procedure = rowSums(!is.na(.))) %>%
+  as.data.frame()
+
+
+x <- select(fyp,ID:DDS)
+
+fyp <- cbind(x,y,z)
+
+fyp1 <- select(fyp, PD1:DX29)
+
+#m <- expand.grid(c('DX'),1:25)
+#m <- apply(m,1,paste0,collapse = '', sep = NULL)
+#the above will give "DX 1" etc but we want "DX1"
+m <- paste0('DX', 1:25)
+m <- c("PD1", m)
+m
+
+fyp1 <- unite(fyp1, col = 'Penyakit', m, sep=" ", remove = TRUE )
+fyp1 <- select(fyp1, 1:1)
+
+fyp1$Penyakit <- gsub("NA","", as.character(fyp1$Penyakit))
+
+#view(fyp1)
+
+fyp2 <- select(fyp, PDX1:PDX30)
+
+#Other way is:
+# a <- c(rep("PDX",30))
+# b <- c(1:30)
+# m <- paste(a,b, collapse = NULL, sep='')
+
+m <- paste0('PDX', 1:30)
+m <- c(m)
+m
+
+fyp2 <- unite(fyp2, col = 'Rawatan', m, sep=" ", remove = TRUE )
+fyp2 <- select(fyp2, 1:1)
+
+fyp2$Rawatan <- gsub("NA","", as.character(fyp2$Rawatan))
+
+fyp <- select(fyp , -c('PD1':'DX29'))
+fyp <- select(fyp , -c('PDX1':'PDX30'))
+
+fyp <- add_column(fyp, fyp1, .after = "DDS")
+fyp <- add_column(fyp, fyp2, .before = "n_Procedure")
+
+fyp <- fyp %>%
+  mutate(HBP = ifelse(grepl("I10", Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(Diabetes = ifelse(grepl("E11", Penyakit),1,0), .after = Penyakit)
+
+
+fyp <- fyp %>%
+  mutate(Stroke = ifelse(grepl("I64|I63|I62|I61|I60", Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(Obesiti = ifelse(grepl("E66", Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(Smoking = ifelse(grepl("F17", Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(COPD = ifelse(grepl("J44", Penyakit),1,0), .after = Penyakit)
+
+#fyp <- fyp %>%
+ # mutate(Asma = ifelse(grepl("J45", Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(IHD = ifelse(grepl("I25", Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(hipoalbuminemia=ifelse(grepl("E88",Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(KegagalanGinjal = ifelse(grepl("N18|N17", Penyakit),1,0), .after = Penyakit)
+
+#fyp <- fyp %>%
+ # mutate(RenalFailure = ifelse(grepl("N17", Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(PleuralEffusion = ifelse(grepl("J90", Penyakit),1,0), .after = Penyakit)
+
+
+fyp <- fyp %>%
+  mutate(Depression = ifelse(grepl("F32|F34", Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(Anxiety = ifelse(grepl("F4", Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(Dementia = ifelse(grepl("F03|F02", Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(Epilepsy = ifelse(grepl("G40", Penyakit),1,0), .after = Penyakit)
+
+#fyp <- fyp %>%
+#  mutate(Parkinson = ifelse(grepl("G2", Penyakit),1,0), .after = Penyakit)
+
+fyp <- fyp %>%
+  mutate(Covid = ifelse(grepl("U07", Penyakit),1,0), .after = Penyakit)
+
+y <- fyp %>%
+  select(Covid:HBP) %>%
+  mutate(n_DiagnoseMain = rowSums(!(.=="0")), .after= HBP) %>%
+  select(n_DiagnoseMain)
+
+fyp <- add_column(fyp, y, .after = "HBP")
+
+y <- fyp %>%
+  select(Covid:HBP) %>%
+  mutate(across(where(is.numeric), as.factor))
+
+fyp <- select(fyp , -c('Covid':'HBP'))
+fyp <- add_column(fyp, y, .after = "Penyakit")
+
+fyp$SEX <- as.factor(fyp$SEX)
+fyp$DDS <- as.factor(fyp$DDS)
+fyp$LOS <- as.numeric(fyp$LOS)
+
+colnames(fyp)[10] <- "UMUR"
+colnames(fyp)[11] <- "JANTINA"
+
+#To check R squared in GLM: with(summary(model), 1 - deviance/null.deviance)
+
+#m <- glm(formula = LOS ~ JANTINA + DDS + UMUR + Depression+Anxiety+Covid + PleuralEffusion + KegagalanGinjal + Epilepsy+ IHD + Smoking + Stroke  + Diabetes + HBP + Dementia + ImbasanCT +  SinarXDadaAbdomen + TransfusiDarah + UltrasoundHeart + CATHeartThorax + Electrocardiogram +   +  SinarXDada, family = "poisson", data = fyp)
+
+fyp <- fyp %>%
+  mutate(SinarXDada = ifelse(grepl("87.44", Rawatan),1,0), .after = Rawatan)
+##88.19 is  SinarX abdomen
+
+fyp <- fyp %>%
+  mutate( SinarXAbdomen = ifelse(grepl("88.19", Rawatan),1,0), .after = Rawatan)
+
+#fyp <- fyp %>%
+ # mutate(CATHead  = ifelse(grepl("87.03", Rawatan),1,0), .after = Rawatan)
+
+fyp <- fyp %>%
+  mutate(Intubasi = ifelse(grepl("96.05", Rawatan),1,0), .after = Rawatan)
+
+#fyp <- fyp %>%
+#  mutate(Electrocardiogram = ifelse(grepl("89.52", Rawatan),1,0), .after = Rawatan)
+
+#fyp <- fyp %>%
+#  mutate(CATHeartThorax = ifelse(grepl("87.41|88.01|87.03", Rawatan),1,0), .after = Rawatan)
+
+#fyp <- fyp %>%
+#  mutate(UltrasoundHeart = ifelse(grepl("88.74", Rawatan),1,0), .after = Rawatan)
+
+#fyp <- fyp %>%
+ # mutate(TransfusiDarah = ifelse(grepl("99.04", Rawatan),1,0), .after = Rawatan)
+
+fyp <- fyp %>%
+  mutate(TerapiRespiratori = ifelse(grepl("93.94|93.96|93.99|93.90", Rawatan),1,0), .after = Rawatan)
+
+#fyp <- fyp %>%
+ # mutate(VentMekanikal = ifelse(grepl("93.90", Rawatan),1,0), .after = Rawatan)
+
+fyp <- fyp %>%
+  mutate(ImbasanCT  = ifelse(grepl("87.41|88.01|87.03", Rawatan),1,0), .after = Rawatan)
+
+y <- fyp %>%
+  select(ImbasanCT: SinarXDada) %>%
+  mutate(across(where(is.numeric), as.factor))
+
+fyp <- select(fyp , -c('ImbasanCT':'SinarXDada'))
+fyp <- add_column(fyp, y, .after = "Rawatan")
+
+
+fyp$JANTINA <- factor(fyp$JANTINA, labels = c("Lelaki","Perempuan"))
+fyp$JANTINA <- factor(fyp$JANTINA, levels  = c("Perempuan","Lelaki"))
+#fyp$DDS <- as.character(fyp$DDS)
+
+#fyp <- fyp %>%
+ #   mutate(DDS= ifelse(grepl("4", DDS),2,ifelse(grepl("1", DDS),1,0)), .after = DDS)
+
+fyp <- fyp %>%
+   mutate(DDS4 = ifelse(grepl("4", DDS),1,0), .after = DDS)
+
+fyp$DDS4 <- as.factor(fyp$DDS4)
+
+fyp$DDS4 <- factor(fyp$DDS4, labels = c("Lain-lain","Meninggal"))
+
+fyp <- fyp %>% 
+    mutate(
+        # Create categories
+        age_group = case_when(
+            UMUR <= 9            ~ " 0-9",
+            UMUR >= 10 & UMUR < 68 ~ " 10-67",
+            UMUR >= 68             ~ " >68"
+        ),
+        # Convert to factor
+        age_group = factor(
+            age_group,
+            level = c(" 10-67"," 0-9",  " >68")
+        )
+    )
+
+```
+
+You can also embed plots, for example:
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+#to train data and test data > to check for overfitting
+sample <- sample.split(fyp$LOS, SplitRatio = 0.8)
+train <- subset(fyp, sample == TRUE)
+test <- subset(fyp, sample == FALSE)
+
+```
+
+```{r}
+
+b <- subset(fyp, select = UMUR:JANTINA)
+c <- subset(fyp, select = DDS4)
+d <- subset(fyp, select = Covid:HBP)
+e <- subset(fyp, select = ImbasanCT: SinarXDada)
+f <- subset(fyp, select = age_group)
+
+fyp1 <- cbind(b,c,d,e,f)
+
+fyp1 <- subset(fyp1, select = JANTINA:age_group)
+
+
+```
+
+```{r}
+for (x in 1:20){
+  for (y in 1:20) {
+    a <- chisq.test(fyp1[,x],fyp1[,y])
+    aray[x,y] <- a$p.value
+  }
+}
+
+for (x in 1:20){
+  for (y in 1:20) {
+    if (x == y){
+      bray[x,y] = "NA"
+    }else{
+    if (aray[x,y] < 0.001){
+      bray[x,y] <- 1
+    }else{
+      bray[x,y] <- 0
+    }
+    }
+  }
+}
+#25 out of 190 pairs is corrrelated
+```
+```{r}
+
+for (x in 1:20) {
+  
+i <-glm(as.formula(paste(colnames(fyp1)[x], "~ .")),data=fyp1, family = binomial)
+k <- with(summary(i), 1 - deviance/null.deviance)
+cray[1,x] <- 1 /(1-k) 
+}
+
+cray
+```
+
+
+```{r}
+#summary(model1 <- glm.nb(formula = LOS ~ JANTINA + DDS4 + age_group + Depression + Anxiety + Covid + PleuralEffusion + KegagalanGinjal + IHD +  Smoking + Stroke + hipoalbuminemia + ImbasanCT + TerapiRespiratori + Intubasi + SinarXDada + SinarXAbdomen, data = fyp, link = log))
+
+#summary(model2 <- step(model2, direction="backward")), scope = formula(fyp1))
+
+#Semua variable
+#summary(model2 <- glm.nb(formula = LOS ~ JANTINA + DDS4 + age_group + Depression+Anxiety+Covid + PleuralEffusion +   KegagalanGinjal + Epilepsy+ IHD + Smoking + Stroke  + Diabetes + Obesiti +hipoalbuminemia+ HBP + COPD+ Dementia + ImbasanCT  + TerapiRespiratori+ Intubasi +  SinarXDada + SinarXAbdomen, data = fyp)) 
+
+# OR summary(model <- glm.nb(formula = LOS ~ ., data = fyp1)) 
+
+summary(model1 <- glm.nb(formula = LOS ~ JANTINA + DDS4 + UMUR + Depression + Anxiety + Covid + PleuralEffusion + KegagalanGinjal + IHD + Stroke + Obesiti + hipoalbuminemia + HBP + Asma + ImbasanCT + TerapiRespiratori + Intubasi + SinarXDada + SinarXAbdomen, data = fyp, init.theta =2.679680001, link = log))
+#Best NB 18 x
+#summary(model1 <-glm.nb(formula = LOS ~ JANTINA + DDS4 + UMUR + Depression + Anxiety + Covid + PleuralEffusion + KegagalanGinjal + IHD + Stroke + Obesiti + hipoalbuminemia + HBP + ImbasanCT + TerapiRespiratori + Intubasi + SinarXDada + SinarXAbdomen, data = fyp, link = log))
+#aic 20260.93
+#MSE on full 99.1269
+#McF R2 25.80684%
+#LogLikelihood (higher better) -10110.46 #-15165.89 if same formula as poisson
+#BIC 20382.38
+#RMSE 9.956249
+# aic bic using same function as poisson: 30369.79 30485.17
+
+#try poisson vs NB in lrtest(model1,model3)
+
+#p-value < 2.2e-16
+#the null hypothesis is that the restricted model (i.e., Poisson) is a better fit of the data. We reject null hypothesis. NB is better fit
+
+
+#Best Poisson 21x
+#summary(model2 <- glm(formula = LOS ~ JANTINA + DDS4 + UMUR + Depression + Anxiety + Covid + PleuralEffusion + KegagalanGinjal + IHD + Smoking + Stroke + Diabetes + Obesiti + hipoalbuminemia + HBP + Dementia + ImbasanCT + TerapiRespiratori + Intubasi + SinarXDada + SinarXAbdomen, family = "poisson", data = fyp)) 
+#aic 30326.81
+#MSE on full 98.39013
+#McF R2 25.21375%
+#LogLikelihood (higher better) -15141.4
+#BIC 30460.4
+#RMSE 9.91918
+#Overdispersion test p-value < 2.2e-16 alternative hypothesis: true dispersion is greater than 1
+
+#Best quasiPoisson 15 x
+#summary(model3 <- glm(formula = LOS ~ JANTINA + DDS4 + UMUR + Depression+Anxiety+Covid + PleuralEffusion +   KegagalanGinjal + Obesiti +hipoalbuminemia + ImbasanCT  + TerapiRespiratori+ Intubasi +  SinarXDada + SinarXAbdomen,family="quasipoisson", data = fyp)) 
+#aic 30598.84 
+#MSE on full 98.49329
+#MSE on test 68.03432
+#McF R2 24.9559%
+#LogLikelihood (higher better) -15172.16
+#BIC 31371.66
+#RMSE 9.924378
+#30602.63 31328.41
+#30609.64 31287.92
+
+#fyp <- fyp %>% mutate(fitted = model1$fitted.values)
+# View(fyp)
+# fyp <- fyp %>% mutate(fittedminusLOS = LOS - fitted)
+
+#confint(model1, 'SinarXAbdomen1', level=0.95)
+
+#summary(model3 <- glm(formula = LOS ~ JANTINA + DDS4 + UMUR + Depression + Anxiety + Covid + PleuralEffusion + KegagalanGinjal + IHD + Stroke + Obesiti + hipoalbuminemia + HBP + ImbasanCT + TerapiRespiratori + Intubasi + SinarXDada + SinarXAbdomen, family = "poisson", data = fyp)) 
+```
+```{r}
+#tree decision
+fyp$e=residuals(glm.nb(LOS~UMUR,data=fyp))
+arbre=rpart(e~DDS,data=fyp)
+prp(arbre,type=2,extra=1)
+
+```
+
+
+```{r}
+#attach(fyp)
+Variable = DDS4
+t.test(LOS~Variable, var = T)
+
+#fyp2 <- fyp %>%
+ # filter(Variable == "Lain-lain")
+         
+#& UMUR >= 56)
+
+#table(fyp2$JANTINA)
+
+#nrow(filter(fyp, SinarXDada == 1 & DDS != 4))
+
+#nrow(filter(fyp, SinarXDada == 1 & DDS == 4))
+
+#mean(fyp2$LOS)
+#sd(fyp2$LOS)
+
+anova(glm.nb(LOS~UMUR))
+```
+
+
+```{r}
+
+model = model1
+
+
+
+pr.glm <- predict(model1, train, type = "response") 
+# test set is to be predicted, test$y : the dependent variable of model
+MSE.glm <- sum((pr.glm - fyp$LOS)^2)/nrow(fyp)
+MSE.glm
+
+
+
+#dispersiontest(model2) #only for poisson
+
+rmse <- train %>%
+  mutate(residual = pr.glm - LOS) %>%
+  summarize(rmse = sqrt(mean(residual^2)))
+
+rmse$rmse
+
+#odtest(model1) #only for negbin
+#Here the null of the Poisson restriction is rejected in favour of my negative binomial regression NegBinModel. Why? Because the test statistic 52863.4998 exceeds 2.7055 with a p-value of < 2.2e-16.
+
+sum(dpois(model1$y, model3$fitted.values, log = TRUE))
+
+model$aic
+BIC(model)
+
+with(summary(model1), 1 - deviance/null.deviance)
+model1$deviance
+
+pchisq(model3$deviance, df=model3$df.residual, lower.tail=FALSE)
+#[1] 0.5512178
+#The null hypothesis is that our model is correctly specified, and we do not have strong evidence to reject that hypothesis. So we have evidence that our model fits good at 5% significance level
+
+logLik(model1)
+
+plot(x=predict(model1),y=fyp$LOS)
+```
+```{r}
+
+rpart.plot(rpart(LOS~UMUR, data = fyp, method = "poisson"))
+```
+
+```{r}
+
+model = model3
+
+
+faicbic <- function(x) {
+  loglik <- sum(dpois(x$y, x$fitted.values, log = TRUE))
+  phi <- summary(x)$dispersion
+  cbind((-2*loglik+2*phi*summary(x)$df[3]),
+        (-2*loglik+log(length(resid(x)))*phi*summary(x)$df[3]))}
+
+modelaicbic <- faicbic(model)
+modelaicbic
+#qqplot
+#fit <- glm.nb(formula = LOS ~ JANTINA + DDS4 + UMUR + Depression + Anxiety + Covid + PleuralEffusion + KegagalanGinjal + IHD + Stroke + Obesiti + hipoalbuminemia + HBP + ImbasanCT + TerapiRespiratori + Intubasi + SinarXDada + SinarXAbdomen, data = fyp, init.theta = 2.674844936, link = log)
+#res <- qresid(fit)
+#qqnorm(res)
+#qqline(res)
+
+#fyp <- fyp %>% mutate(YHat = fitted(model1), res_sqrt = sqrt(abs(rstandard(model1))))
+#ggplot(fyp, aes(YHat, res_sqrt)) +
+ #   geom_point() + geom_smooth()
+
+
+#more plots
+#plot(model1)
+
+fyp %>%
+  ggplot(aes(x=UMUR, y=LOS))+
+  geom_jitter(aes(color=DDS4)) +
+  # or geom_point()
+  facet_wrap(~age_group)+
+  labs(title="Salary vs Years Since PhD",
+       x="Umur",
+       y="LOS",
+       color = "Discaj status")
+```
