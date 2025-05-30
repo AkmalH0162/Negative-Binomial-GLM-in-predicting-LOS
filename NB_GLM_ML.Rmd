@@ -1,5 +1,5 @@
 ---
-title: "FYP Pneumonia"
+title: "FYP Pneumonias"
 output:
   pdf_document: default
   html_document:
