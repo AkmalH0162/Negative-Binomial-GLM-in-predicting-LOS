@@ -106,15 +106,9 @@ Based on the comments in the analysis, the negative binomial model appears to pr
 
 - `data.xlsx`:
   Source dataset used in the analysis.
-  Do not upload this file publicly if it contains sensitive or patient-related data.
+  Im not uploading this one.
 
 ## Important Note on Data Privacy
 
-If this dataset contains real patient or hospital data, it should be anonymized and handled carefully. Avoid uploading confidential or personally identifiable information to a public GitHub repository.
+Im just showing the working of my project, there's no data being uploaded to the public.
 
-## Future Improvements
-
-Possible next steps for this project include:
-
-- organizing the code into clearer sections or scripts
-- adding data dictionaries for variables and
